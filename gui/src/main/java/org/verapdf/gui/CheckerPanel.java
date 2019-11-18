@@ -63,6 +63,7 @@ import org.verapdf.apps.VeraAppConfig;
 import org.verapdf.apps.utils.ApplicationUtils;
 import org.verapdf.gui.utils.GUIConstants;
 import org.verapdf.gui.utils.DialogUtils;
+import org.verapdf.gui.utils.ResultModel;
 import org.verapdf.pdfa.flavours.PDFAFlavour;
 import org.verapdf.pdfa.validation.profiles.Profiles;
 import org.verapdf.pdfa.validation.profiles.ValidationProfile;
@@ -542,25 +543,27 @@ class CheckerPanel extends JPanel {
 
 		if (!this.isValidationErrorOccurred) {
 			try {
-				BatchSummary result = this.validateWorker.get();
+				ResultModel result = this.validateWorker.get();
 				if (!result.isMultiJob()) {
-					if (result.getFailedParsingJobs() == 1) {
+					if (result.getFailedParsingJobCount() == 1) {
 						setResultMessage(GUIConstants.ERROR_IN_PARSING, GUIConstants.VALIDATION_FAILED_COLOR);
-					} else if (result.getFailedEncryptedJobs() == 1) {
+					} else if (result.getFailedEncryptedJobCount() == 1) {
 						setResultMessage(GUIConstants.ENCRYPTED_PDF, GUIConstants.VALIDATION_FAILED_COLOR);
-					} else if (result.getValidationSummary().getCompliantPdfaCount() > 0) {
+					} else if(result.getPolicyNonCompliantJobCount() > 0){
+						setResultMessage(GUIConstants.POLICY_FALSE, GUIConstants.VALIDATION_FAILED_COLOR);
+					}else if (result.getCompliantPdfaCount() > 0) {
 						setResultMessage(GUIConstants.VALIDATION_OK, GUIConstants.VALIDATION_SUCCESS_COLOR);
-					} else if (result.getValidationSummary().getNonCompliantPdfaCount() > 0) {
+					} else if (result.getNonCompliantPdfaCount() > 0) {
 						setResultMessage(GUIConstants.VALIDATION_FALSE, GUIConstants.VALIDATION_FAILED_COLOR);
-					} else if (result.getValidationSummary().getFailedJobCount() == 1) {
+					} else if (result.getValidationFailedJobCount() == 1) {
 						setResultMessage(GUIConstants.ERROR_IN_VALIDATING, GUIConstants.VALIDATION_FAILED_COLOR);
-					} else if (result.getFeaturesSummary().getTotalJobCount() > 0) {
+					} else if (result.getFeatureTotalJobCount() > 0) {
 						setResultMessage(GUIConstants.FEATURES_GENERATED_CORRECT,
 								GUIConstants.VALIDATION_SUCCESS_COLOR);
 					} else {
 						setResultMessage(GUIConstants.ERROR_IN_FEATURES, GUIConstants.VALIDATION_FAILED_COLOR);
 					}
-				} else {
+				} else{
 					setResultMessage(getBatchResultMessage(result), GUIConstants.BEFORE_VALIDATION_COLOR);
 				}
 				this.resultLabel.setVisible(true);
@@ -587,22 +590,28 @@ class CheckerPanel extends JPanel {
 
 	}
 
-	private static String getBatchResultMessage(BatchSummary result) {
+	private static String getBatchResultMessage(ResultModel result) {
 		String divisor = ", "; //$NON-NLS-1$
 		StringBuilder sb = new StringBuilder(
 				String.format("Items processed: %d", Integer.valueOf(result.getTotalJobs()))); //$NON-NLS-1$
-		String end = String.format("%s Parsing Error: %d", divisor, Integer.valueOf(result.getFailedParsingJobs())); //$NON-NLS-1$
-		if (result.getValidationSummary().getTotalJobCount() > 0) {
+		String end = String.format("%s Parsing Error: %d", divisor, Integer.valueOf(result.getFailedParsingJobCount())); //$NON-NLS-1$
+		if (result.getValidationTotalJobCount() > 0) {
 			end = String.format("%sValid: %d%sInvalid: %d%sError: %d", divisor, //$NON-NLS-1$
-					Integer.valueOf(result.getValidationSummary().getCompliantPdfaCount()), divisor,
-					Integer.valueOf(result.getValidationSummary().getNonCompliantPdfaCount()), divisor,
-					Integer.valueOf(result.getValidationSummary().getFailedJobCount()));
-		} else if (result.getFeaturesSummary().getSuccessfulJobCount() > 0) {
+			                    Integer.valueOf(result.getCompliantPdfaCount()), divisor,
+			                    Integer.valueOf(result.getNonCompliantPdfaCount()), divisor,
+			                    Integer.valueOf(result.getValidationFailedJobCount()));
+			sb.append(end);
+		}
+		if (result.getFeatureSuccessfulJobCount() > 0) {
 			String old_end = end;
 			end = String.format("%sFeatures generated: %d%s", divisor, //$NON-NLS-1$
-					Integer.valueOf(result.getFeaturesSummary().getSuccessfulJobCount()), old_end);
+			                    Integer.valueOf(result.getFeatureSuccessfulJobCount()), old_end);
+			sb.append(end);
 		}
-		sb.append(end);
+		if (result.getPolicyNonCompliantJobCount() > 0) {
+			end = String.format("%s%dInvalid: ", divisor, Integer.valueOf(result.getPolicyNonCompliantJobCount()));
+			sb.append(end);
+		}
 		return sb.toString();
 	}
 

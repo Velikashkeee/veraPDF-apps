@@ -21,6 +21,8 @@ import org.verapdf.apps.utils.ApplicationUtils;
 import org.verapdf.core.VeraPDFException;
 import org.verapdf.features.FeatureExtractorConfig;
 import org.verapdf.gui.utils.GUIConstants;
+import org.verapdf.gui.utils.PolicyHandler;
+import org.verapdf.gui.utils.ResultModel;
 import org.verapdf.pdfa.validation.profiles.ValidationProfile;
 import org.verapdf.pdfa.validation.validators.ValidatorConfig;
 import org.verapdf.policy.PolicyChecker;
@@ -31,6 +33,8 @@ import org.xml.sax.SAXException;
 
 import javax.swing.*;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
 import javax.xml.transform.TransformerException;
 import javax.xml.xpath.XPathExpressionException;
 import java.io.*;
@@ -44,7 +48,7 @@ import java.util.logging.Logger;
  *
  * @author Maksim Bezrukov
  */
-class ValidateWorker extends SwingWorker<BatchSummary, Integer> {
+class ValidateWorker extends SwingWorker<ResultModel, Integer> {
 
 	private static final Logger logger = Logger.getLogger(ValidateWorker.class.getCanonicalName());
 
@@ -75,7 +79,9 @@ class ValidateWorker extends SwingWorker<BatchSummary, Integer> {
 	}
 
 	@Override
-	protected BatchSummary doInBackground() {
+	protected ResultModel doInBackground() {
+		ResultModel resultModel = null;
+
 		try {
 			this.xmlReport = File.createTempFile("veraPDF-tempXMLReport", ".xml"); //$NON-NLS-1$//$NON-NLS-2$
 			this.xmlReport.deleteOnExit();
@@ -115,6 +121,9 @@ class ValidateWorker extends SwingWorker<BatchSummary, Integer> {
 
 				if (isPolicy) {
 					applyPolicy();
+					resultModel = new ResultModel(batchSummary,policyCheck(xmlReport));
+				} else {
+					resultModel = new ResultModel(batchSummary);
 				}
 			}
 		} catch (IOException e) {
@@ -123,12 +132,18 @@ class ValidateWorker extends SwingWorker<BatchSummary, Integer> {
 		} catch (VeraPDFException e) {
 			logger.log(Level.SEVERE, ERROR_IN_PROCESSING, e);
 			this.parent.handleValidationError(ERROR_IN_PROCESSING + ": ", e); //$NON-NLS-1$
+		} catch (ParserConfigurationException e){
+			logger.log(Level.SEVERE, ERROR_IN_PROCESSING, e);
+			this.parent.handleValidationError(ERROR_IN_PROCESSING + ": ", e);
+		} catch (SAXException e){
+			logger.log(Level.SEVERE, ERROR_IN_PROCESSING, e);
+			this.parent.handleValidationError(ERROR_IN_PROCESSING + ": ", e);
 		}
 		if (this.batchSummary != null) {
 			writeHtmlReport();
 		}
 
-		return this.batchSummary;
+		return resultModel;
 	}
 
 	private void applyPolicy() throws IOException, VeraPDFException {
@@ -177,5 +192,13 @@ class ValidateWorker extends SwingWorker<BatchSummary, Integer> {
 			logger.log(Level.SEVERE, message, excep);
 			this.htmlReport = null;
 		}
+	}
+
+	private int policyCheck(File xmlReport) throws ParserConfigurationException, SAXException, IOException{
+		SAXParserFactory factory = SAXParserFactory.newInstance();
+		SAXParser parser = factory.newSAXParser();
+		PolicyHandler policyHandler = new PolicyHandler();
+		parser.parse(xmlReport,policyHandler);
+		return policyHandler.getPolicyNonCompliantJobCount();
 	}
 }
